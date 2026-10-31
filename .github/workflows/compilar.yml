@@ -1,0 +1,80 @@
+name: Compilar SmartTube Sala
+
+# Todos os dias às 03:30 (UTC) vê se saiu uma versão estável nova do SmartTube.
+# Se saiu (ou se mudaram as nossas alterações), aplica o patch, compila, assina e publica.
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: "Compilar mesmo que esta versão já esteja publicada"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["patches/**", "REVISAO"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: compilar
+  cancel-in-progress: false
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SMARTTUBE_SRC: ${{ runner.temp }}/smarttube-src
+      SALA_SAIDA: ${{ runner.temp }}/saida
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ver se há versão nova
+        id: versao
+        run: |
+          TAG=$(scripts/ultima_estavel.sh)
+          REV=$(tr -d '[:space:]' < REVISAO)
+          RELEASE="sala-$TAG-$REV"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          if gh release view "$RELEASE" >/dev/null 2>&1 && [ "${{ inputs.forcar }}" != "true" ]; then
+            echo "Já publicado: $RELEASE"
+            echo "compilar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "A compilar: $RELEASE"
+            echo "compilar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.versao.outputs.compilar == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Preparar código (SmartTube + patch da Sala)
+        if: steps.versao.outputs.compilar == 'true'
+        run: scripts/preparar.sh "${{ steps.versao.outputs.tag }}" "$SMARTTUBE_SRC"
+
+      - name: Compilar e assinar
+        if: steps.versao.outputs.compilar == 'true'
+        env:
+          SALA_KEYSTORE_B64: ${{ secrets.SALA_KEYSTORE_B64 }}
+          SALA_KEYSTORE_PASSWORD: ${{ secrets.SALA_KEYSTORE_PASSWORD }}
+          SALA_KEY_ALIAS: ${{ secrets.SALA_KEY_ALIAS }}
+        run: |
+          export SALA_KEYSTORE="$RUNNER_TEMP/sala.p12"
+          echo "$SALA_KEYSTORE_B64" | base64 -d > "$SALA_KEYSTORE"
+          scripts/compilar.sh
+          rm -f "$SALA_KEYSTORE"
+
+      - name: Publicar
+        if: steps.versao.outputs.compilar == 'true'
+        run: |
+          if [ "${{ inputs.forcar }}" = "true" ]; then
+            gh release delete "${{ steps.versao.outputs.release }}" --yes --cleanup-tag 2>/dev/null || true
+          fi
+          scripts/publicar.sh "$SALA_SAIDA" "${{ steps.versao.outputs.release }}"

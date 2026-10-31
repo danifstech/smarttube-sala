@@ -1,0 +1,189 @@
+diff --git a/common/src/main/java/com/liskovsoft/smartyoutubetv2/common/utils/Utils.java b/common/src/main/java/com/liskovsoft/smartyoutubetv2/common/utils/Utils.java
+index c9adc73..91e7596 100644
+--- a/common/src/main/java/com/liskovsoft/smartyoutubetv2/common/utils/Utils.java
++++ b/common/src/main/java/com/liskovsoft/smartyoutubetv2/common/utils/Utils.java
+@@ -115,6 +115,7 @@ public class Utils {
+             "org.smarttube.beta",
+             "org.smarttube.stable",
+             "app.smarttube.fdroid",
++            "pt.daniel.smarttube", // SmartTube Sala
+     };
+     public static final String[] BACKUP_PREFS = {
+             "yt_service_prefs.xml",
+diff --git a/common/src/ststable/res/values/update_urls.xml b/common/src/ststable/res/values/update_urls.xml
+index 80bf351..6c46792 100644
+--- a/common/src/ststable/res/values/update_urls.xml
++++ b/common/src/ststable/res/values/update_urls.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <string-array name="update_urls">
+-        <item>https://github.com/yuliskov/SmartTubeNext/releases/download/latest/smarttube_stable2.json</item>
++        <item>https://github.com/danifstech/smarttube-sala/releases/download/latest/smarttube_sala.json</item>
+     </string-array>
+ </resources>
+\ No newline at end of file
+diff --git a/leanbackassistant/src/ststable/res/values/strings.xml b/leanbackassistant/src/ststable/res/values/strings.xml
+index 9b0e26b..734b71d 100644
+--- a/leanbackassistant/src/ststable/res/values/strings.xml
++++ b/leanbackassistant/src/ststable/res/values/strings.xml
+@@ -1,5 +1,5 @@
+ <resources>
+     <string name="search_label">SmartTube</string>
+     <string name="settings_description">SmartTube Videos</string>
+-    <string translatable="false" name="search_authority">org.smarttube.stable</string>
++    <string translatable="false" name="search_authority">pt.daniel.smarttube</string>
+ </resources>
+diff --git a/leanbackassistant/src/ststable/res/xml/searchable.xml b/leanbackassistant/src/ststable/res/xml/searchable.xml
+index 8255642..009eed2 100644
+--- a/leanbackassistant/src/ststable/res/xml/searchable.xml
++++ b/leanbackassistant/src/ststable/res/xml/searchable.xml
+@@ -18,9 +18,9 @@
+     android:label="@string/search_label"
+     android:icon="@drawable/lb_ic_in_app_search"
+     android:searchSettingsDescription="@string/settings_description"
+-    android:searchSuggestAuthority="org.smarttube.stable"
++    android:searchSuggestAuthority="pt.daniel.smarttube"
+     android:searchSuggestIntentAction="android.intent.action.VIEW"
+-    android:searchSuggestIntentData="content://org.smarttube.stable/video"
++    android:searchSuggestIntentData="content://pt.daniel.smarttube/video"
+     android:queryAfterZeroResults="true"
+     android:searchSuggestPath="search"
+     android:searchSuggestThreshold="0" />
+\ No newline at end of file
+diff --git a/smarttubetv/build.gradle b/smarttubetv/build.gradle
+index 3664bfd..bb06079 100644
+--- a/smarttubetv/build.gradle
++++ b/smarttubetv/build.gradle
+@@ -31,8 +31,9 @@ if (keystorePropertiesFile.exists()) {
+ }
+ 
+ // The first letter of the flavor name must be in uppercase
+-if (new File("${projectDir}/google-services.json").exists() && (getGradle().getStartParameter().getTaskRequests().toString().contains("Stbeta") ||
+-        getGradle().getStartParameter().getTaskRequests().toString().contains("Ststable"))) {
++// SmartTube Sala: sem Firebase/Crashlytics na variante estável (o google-services.json é do pacote original
++// e os relatórios de erros iriam para o projeto do autor).
++if (new File("${projectDir}/google-services.json").exists() && getGradle().getStartParameter().getTaskRequests().toString().contains("Stbeta")) {
+     // Google Services Gradle plugin (transforms google-services.json file)
+     apply plugin: 'com.google.gms.google-services'
+ 
+@@ -164,7 +165,8 @@ android {
+             targetSdkVersion project.properties.compileSdkVersion
+         }
+         ststable {
+-            applicationId "org.smarttube.stable"
++            // SmartTube Sala: pacote próprio, instala-se ao lado do SmartTube original
++            applicationId "pt.daniel.smarttube"
+             targetSdkVersion project.properties.compileSdkVersion
+         }
+         stfdroid {
+@@ -242,9 +244,7 @@ dependencies {
+         transitive = true
+     }
+ 
+-    ststableImplementation('com.google.firebase:firebase-crashlytics:' + firebaseCrashlyticsVersion) {
+-        transitive = true
+-    }
++    // SmartTube Sala: Crashlytics desligado na variante estável (ver acima).
+ 
+     // debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.14'
+ 
+diff --git a/smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/VideoCardPresenter.java b/smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/VideoCardPresenter.java
+index 686ad7b..903e234 100644
+--- a/smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/VideoCardPresenter.java
++++ b/smarttubetv/src/main/java/com/liskovsoft/smartyoutubetv2/tv/presenter/VideoCardPresenter.java
+@@ -3,11 +3,14 @@ package com.liskovsoft.smartyoutubetv2.tv.presenter;
+ import android.app.Activity;
+ import android.content.Context;
+ import android.graphics.Bitmap;
++import android.graphics.Color;
++import android.graphics.Outline;
+ import android.graphics.drawable.Drawable;
+ import android.os.Build.VERSION;
+ import android.util.Pair;
+ import android.view.View;
+ import android.view.ViewGroup;
++import android.view.ViewOutlineProvider;
+ import android.widget.TextView;
+ import androidx.annotation.Nullable;
+ import androidx.core.content.ContextCompat;
+@@ -84,7 +87,9 @@ public class VideoCardPresenter extends LongClickPresenter {
+         cardView.enableBadge(isBadgeEnabled());
+         cardView.enableTitle(isTitleEnabled());
+         cardView.enableContent(isContentEnabled());
+-        cardView.setBackgroundColor(mDefaultBackgroundColor); // background is temporarily visible during animations
++        // SmartTube Sala: sem fundo à volta do cartão, como no YouTube TV.
++        cardView.setBackgroundColor(Color.TRANSPARENT);
++        roundPreviewCorners(cardView);
+         //if (VERSION.SDK_INT >= 23 && MainUIData.instance(context).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
+         //    cardView.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
+         //}
+@@ -92,9 +97,34 @@ public class VideoCardPresenter extends LongClickPresenter {
+         return new ViewHolder(cardView);
+     }
+ 
++    // SmartTube Sala: miniatura com os quatro cantos arredondados (o título fica por baixo, sem fundo).
++    private static void roundPreviewCorners(ComplexImageCardView view) {
++        View preview = view.findViewById(R.id.main_image_wrapper);
++        if (preview == null || VERSION.SDK_INT < 21) {
++            return;
++        }
++        final float radius = view.getResources().getDimension(R.dimen.lb_rounded_rect_corner_radius);
++        preview.setOutlineProvider(new ViewOutlineProvider() {
++            @Override
++            public void getOutline(View v, Outline outline) {
++                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
++            }
++        });
++        preview.setClipToOutline(true);
++    }
++
+     private void updateCardBackgroundColor(ComplexImageCardView view, boolean selected) {
+-        int backgroundColor = selected ? mSelectedBackgroundColor : mDefaultBackgroundColor;
+-        int textColor = selected ? mSelectedTextColor : mDefaultTextColor;
++        // SmartTube Sala: estilo YouTube TV. A área do título fica sempre transparente,
++        // o título a branco e a linha de baixo a cinzento; a seleção é um contorno branco.
++        int backgroundColor = Color.TRANSPARENT;
++        int textColor = Color.WHITE;
++        int contentColor = selected ? 0xFFE0E0E0 : 0xFFAAAAAA;
++
++        View preview = view.findViewById(R.id.main_image_wrapper);
++        if (preview != null && VERSION.SDK_INT >= 23) {
++            preview.setForeground(selected ?
++                    ContextCompat.getDrawable(view.getContext(), R.drawable.sala_card_selected_outline) : null);
++        }
+ 
+         // Both background colors should be set because the view's
+         // background is temporarily visible during animations.
+@@ -112,7 +142,7 @@ public class VideoCardPresenter extends LongClickPresenter {
+         }
+         TextView contentText = view.findViewById(R.id.content_text);
+         if (contentText != null) {
+-            contentText.setTextColor(textColor);
++            contentText.setTextColor(contentColor);
+         }
+     }
+ 
+diff --git a/smarttubetv/src/main/res/drawable/sala_card_selected_outline.xml b/smarttubetv/src/main/res/drawable/sala_card_selected_outline.xml
+new file mode 100644
+index 0000000..d81a16f
+--- /dev/null
++++ b/smarttubetv/src/main/res/drawable/sala_card_selected_outline.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- SmartTube Sala: contorno branco do cartão selecionado, como no YouTube TV. -->
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <stroke android:width="3dp" android:color="#FFFFFFFF" />
++    <corners android:radius="@dimen/lb_rounded_rect_corner_radius" />
++</shape>
+diff --git a/smarttubetv/src/ststable/res/values/strings.xml b/smarttubetv/src/ststable/res/values/strings.xml
+index fd35d71..8159c4a 100644
+--- a/smarttubetv/src/ststable/res/values/strings.xml
++++ b/smarttubetv/src/ststable/res/values/strings.xml
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string translatable="false" name="app_name"><![CDATA[SmartTube]]></string>
++    <string translatable="false" name="app_name"><![CDATA[SmartTube Sala]]></string>
+     <string translatable="false" name="browse_title"><![CDATA[SmartTube]]></string>
+ </resources>
