@@ -28,10 +28,13 @@ jobs:
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
-      SMARTTUBE_SRC: ${{ runner.temp }}/smarttube-src
-      SALA_SAIDA: ${{ runner.temp }}/saida
     steps:
       - uses: actions/checkout@v4
+
+      - name: Pastas de trabalho
+        run: |
+          echo "SMARTTUBE_SRC=$RUNNER_TEMP/smarttube-src" >> "$GITHUB_ENV"
+          echo "SALA_SAIDA=$RUNNER_TEMP/saida" >> "$GITHUB_ENV"
 
       - name: Ver se há versão nova
         id: versao
